@@ -219,3 +219,8 @@ Look for the first `FATAL EXCEPTION` block - it names the exact class and line.
 The QR is password-equivalent: it grants access to your DSH session. Do not
 photograph or share it. It also stops working when DSH restarts, because DSH
 generates a new launch token per process.
+
+## License
+
+[MIT](LICENSE). Build it, sign it with your own key, and pair it with your own
+tunnel.
