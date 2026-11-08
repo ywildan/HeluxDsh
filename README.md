@@ -89,7 +89,14 @@ Requires JDK 17 and the Android SDK (platform 34, build-tools 34):
 **The app closes immediately after tapping "Scan QR code".**
 Fixed in 1.0.1: `ScanActivity` was missing from `AndroidManifest.xml`, so the
 explicit `Intent` threw `ActivityNotFoundException`. Every launched component
-must be declared; `scripts/check-manifest.py` now fails the build if one is not.
+must be declared; `scripts/check-manifest.py` now fails the build if one is not,
+and the CI job re-reads the packaged APK to confirm both activities are in it.
+
+**Is `id.helux.dsh.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` expected?**
+Yes. AGP adds it to every app targeting SDK 33+, so dynamically registered
+receivers default to `NOT_EXPORTED`. It is signature-level, granted
+automatically, and never shown to the user. The APK check allowlists exactly
+this permission and still fails on any other.
 
 **Scanning finds nothing even though the QR is clearly in view.**
 The camera delivers padded frames rotated against the screen. `FrameRotation`
