@@ -57,6 +57,41 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 
+      # Proves the shipped APK itself declares every component and the
+      # version we think it is - not just that the sources compile.
+      - name: Verify contents of the built APK
+        run: |
+          set -euo pipefail
+          AAPT2="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)"
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest.txt"
+
+          for component in MainActivity ScanActivity; do
+            if ! grep -q "id.helux.dsh.$component" "$RUNNER_TEMP/manifest.txt"; then
+              echo "::error::$component is missing from the APK manifest"
+              exit 1
+            fi
+            echo "APK declares $component"
+          done
+
+          grep -q 'android.permission.CAMERA' "$RUNNER_TEMP/manifest.txt" \
+            || { echo "::error::CAMERA permission missing from the APK"; exit 1; }
+          grep -q 'android.permission.INTERNET' "$RUNNER_TEMP/manifest.txt" \
+            || { echo "::error::INTERNET permission missing from the APK"; exit 1; }
+
+          # Any extra permission would be a privacy regression.
+          extra="$(grep -o 'android.permission.[A-Z_]*' "$RUNNER_TEMP/manifest.txt" \
+            | sort -u | grep -v -E 'CAMERA|INTERNET' || true)"
+          if [ -n "$extra" ]; then
+            echo "::error::unexpected permissions in the APK: $extra"
+            exit 1
+          fi
+          echo "APK permissions are exactly CAMERA + INTERNET"
+
+          "$AAPT2" dump badging "$APK" | grep -q "versionCode='2'" \
+            || { echo "::error::unexpected versionCode"; exit 1; }
+          echo "APK versionCode is 2"
+
       - name: Report APK
         run: |
           set -euo pipefail
