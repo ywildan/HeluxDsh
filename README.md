@@ -3,25 +3,41 @@
 [![Build APK](https://github.com/ywildan/HeluxDsh/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ywildan/HeluxDsh/actions/workflows/build-apk.yml)
 
 A small Android app that pairs with the **[Helux Tunnel](https://github.com/ywildan/dsh-tunnel)**
-DSH plugin by scanning a QR code, then opens your DSH Web UI at
-`https://helux.web.id`.
+DSH plugin by scanning a QR code, then opens your DSH Web UI on **your own
+hostname**.
 
 Pairing replaces copying a launch token by hand: the panel draws the token as a
 QR, this app scans it once, DSH exchanges the token for a cookie, and every later
 launch goes straight to the clean URL.
 
+## Works with any domain
+
+One APK serves every deployment. The **first QR you scan binds the hostname** to
+this device (trust on first use); every later scan must match it:
+
+- Unpaired, any valid `https` host is accepted, so someone running their own
+  tunnel can pair this build to `dsh.example.com`.
+- Once paired, a QR for a *different* host is refused with
+  *"This device is paired with …"*, so a hostile QR cannot move an
+  already-paired device to a look-alike server.
+- **Pair again** on the main screen clears the binding so you can switch servers
+  deliberately.
+
+That is why the APK contains no domain constant: the QR is the configuration.
+
 ## How it behaves
 
 1. **First launch** — a pairing screen explains what to do and offers *Scan QR
-   code*. The camera is requested only when you tap it.
+   code*. The camera is requested only when you tap it. The first scan decides
+   which server this device trusts.
 2. **Scan** — the QR is decoded offline with ZXing (no Google Play Services, no
    network call). The payload is validated before anything is loaded:
-   `https`, host exactly `helux.web.id`, no credentials, default port, path `/`,
-   and exactly one non-empty `token` parameter. Anything else is refused with a
-   reason and you can scan again.
+   `https`, no credentials, default port, path `/`, exactly one non-empty
+   `token` parameter, and a host that matches the paired one. Anything else is
+   refused with a reason and you can scan again.
 3. **Pair** — the validated URL is loaded once. DSH mints its session cookie and
-   redirects to `https://helux.web.id/`. The tokenized URL is dropped from the
-   WebView history and never stored.
+   redirects to `https://<host>/`. The tokenized URL is dropped from the WebView
+   history and never stored; only the hostname is remembered.
 4. **Later launches** — the app opens the clean URL directly. The cookie lives in
    the WebView cookie jar, so the device stays paired until the cookie expires
    (DSH's `cookieMaxAgeDays`, 30 days by default) or DSH is reset.
@@ -39,6 +55,8 @@ launch goes straight to the clean URL.
   WebView.
 - The launch token is never written to preferences, logs, or disk. `PairingStore`
   records only the hostname it paired with, so `adb backup`/logcat reveal nothing.
+- A paired device cannot be re-pointed at another server without an explicit
+  **Pair again**, so scanning a hostile QR fails instead of silently migrating.
 - No auto-pairing, no deep links, no background services, no analytics.
 
 ## Build the APK with GitHub Actions
@@ -178,13 +196,13 @@ Look for the first `FATAL EXCEPTION` block - it names the exact class and line.
 
 | Path | Purpose |
 | --- | --- |
-| `app/src/main/java/id/helux/dsh/HeluxConfig.kt` | Fixed hostname, token parameter, preference keys |
+| `app/src/main/java/id/helux/dsh/HeluxConfig.kt` | Token parameter, preference keys, URL building (no hostname constant) |
 | `app/src/main/java/id/helux/dsh/LaunchUrlValidator.kt` | Strict QR payload validation |
 | `app/src/main/java/id/helux/dsh/ScanActivity.kt` | CameraX + ZXing scanner, one-shot delivery |
 | `app/src/main/java/id/helux/dsh/MainActivity.kt` | Pairing screen, WebView, status panels |
 | `app/src/main/java/id/helux/dsh/FrameRotation.kt` | Packs padded planes and rotates frames upright |
-| `app/src/main/java/id/helux/dsh/PairingStore.kt` | Remembers the paired hostname only |
-| `app/src/test/java/id/helux/dsh/LaunchUrlValidatorTest.kt` | 14 validation cases |
+| `app/src/main/java/id/helux/dsh/PairingStore.kt` | Remembers which hostname this device paired with |
+| `app/src/test/java/id/helux/dsh/LaunchUrlValidatorTest.kt` | 18 validation cases, unpaired and paired |
 | `app/src/test/java/id/helux/dsh/FrameRotationTest.kt` | 11 frame geometry cases |
 | `app/src/test/java/id/helux/dsh/ActivityLaunchTest.kt` | Robolectric launch tests for both Activities |
 | `scripts/check-manifest.py` | Fails the build when a launched component is undeclared |

@@ -32,8 +32,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ScanActivity : AppCompatActivity() {
 
     companion object {
-        /** Result action carrying the validated launch URL. */
+        /** Result extra carrying the validated launch URL. */
         const val EXTRA_LAUNCH_URL = "launch-url"
+
+        /** Result extra carrying the hostname the QR belonged to. */
+        const val EXTRA_AUTHORITY = "authority"
+
+        /** Input extra: the hostname this device is already paired with. */
+        const val EXTRA_EXPECTED_HOST = "expected-host"
     }
 
     private lateinit var previewView: PreviewView
@@ -41,6 +47,8 @@ class ScanActivity : AppCompatActivity() {
     /** Typed as View: only visibility changes, not the panel's root type. */
     private lateinit var permissionPanel: View
     private lateinit var grantButton: Button
+    /** Hostname already paired on this device, or null on the first pairing. */
+    private var expectedHost: String? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var analysisExecutor: ExecutorService? = null
     private val delivered = AtomicBoolean(false)
@@ -58,6 +66,8 @@ class ScanActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scan)
+
+        expectedHost = intent.getStringExtra(EXTRA_EXPECTED_HOST)?.takeIf { it.isNotEmpty() }
 
         previewView = findViewById(R.id.preview)
         statusText = findViewById(R.id.scan_status)
@@ -181,9 +191,14 @@ class ScanActivity : AppCompatActivity() {
      */
     private fun deliver(raw: String) {
         runOnUiThread {
-            when (val result = LaunchUrlValidator.validate(raw)) {
+            when (val result = LaunchUrlValidator.validate(raw, expectedHost)) {
                 is ScanResult.Launch -> {
-                    setResult(RESULT_OK, intent.putExtra(EXTRA_LAUNCH_URL, result.url))
+                    setResult(
+                        RESULT_OK,
+                        intent
+                            .putExtra(EXTRA_LAUNCH_URL, result.url)
+                            .putExtra(EXTRA_AUTHORITY, result.authority),
+                    )
                     finish()
                 }
                 is ScanResult.Rejected -> {

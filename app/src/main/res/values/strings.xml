@@ -4,7 +4,7 @@
 
     <!-- Pairing screen -->
     <string name="pairing_title">Pair this device</string>
-    <string name="pairing_body">Open the Helux Tunnel panel on your computer, turn the tunnel ON, then press “Pair device (QR)” and scan the code shown there.</string>
+    <string name="pairing_body">Open the Helux Tunnel panel on your computer, turn the tunnel ON, then press “Pair device (QR)” and scan the code shown there. The first code you scan sets the server; later codes must match it.</string>
     <string name="pairing_note">The code is only valid until DSH restarts. It works like a password - never share a screenshot of it.</string>
     <string name="pairing_scan">Scan QR code</string>
 
@@ -21,6 +21,6 @@
     <string name="status_auth_body">DSH rejected the saved session, usually because the pairing expired or DSH was reset. Scan a new QR code to pair again.</string>
     <string name="status_repair_action">Pair again</string>
     <string name="status_offline_title">Tunnel is not reachable</string>
-    <string name="status_offline_body">helux.web.id did not answer. Check that the tunnel is ON in the Helux Tunnel panel and that this device has internet access.</string>
+    <string name="status_offline_body">%1$s did not answer. Check that the tunnel is ON in the Helux Tunnel panel and that this device has internet access.</string>
     <string name="status_retry_action">Try again</string>
 </resources>

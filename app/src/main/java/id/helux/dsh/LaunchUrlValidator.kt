@@ -6,8 +6,12 @@ import java.net.URI
  * Result of inspecting a scanned QR payload.
  */
 sealed class ScanResult {
-    /** A launch URL for this app's own hostname, ready to load once. */
-    data class Launch(val url: String) : ScanResult()
+    /**
+     * A launch URL ready to load once.
+     * @property url the tokenized URL, rebuilt from the validated parts.
+     * @property authority the hostname the QR belongs to.
+     */
+    data class Launch(val url: String, val authority: String) : ScanResult()
 
     /** The payload is not an acceptable launch URL; [reason] is user-facing. */
     data class Rejected(val reason: String) : ScanResult()
@@ -16,19 +20,24 @@ sealed class ScanResult {
 /**
  * Validates a scanned string before it is ever handed to a WebView.
  *
- * Rules, in order: absolute `https`, exact hostname match, no userinfo, no
- * non-default port, path `/`, and exactly one non-empty `token` parameter.
- * Everything else is rejected, so a QR that points at another site cannot
- * silently pair the app with an attacker.
+ * Rules, in order: absolute `https`, no userinfo, no non-default port, path `/`,
+ * and exactly one non-empty `token` parameter.
+ *
+ * The hostname is bound on the first successful scan and enforced afterwards:
+ * before pairing any valid hostname is accepted, and once a device is paired a
+ * QR for a different host is rejected. That is what lets one APK serve every
+ * deployment without letting a hostile QR redirect an already-paired device.
  */
 object LaunchUrlValidator {
 
     /**
      * Inspect a scanned payload.
      * @param raw the decoded QR text.
+     * @param expectedHost the hostname this device is already paired with, or
+     *   null on the first pairing.
      * @return [ScanResult.Launch] when acceptable, otherwise a rejection reason.
      */
-    fun validate(raw: String): ScanResult {
+    fun validate(raw: String, expectedHost: String?): ScanResult {
         val text = raw.trim()
         if (text.isEmpty()) return ScanResult.Rejected("The QR code is empty.")
 
@@ -44,8 +53,14 @@ object LaunchUrlValidator {
         if (uri.userInfo != null) {
             return ScanResult.Rejected("The pairing code contains credentials and was rejected.")
         }
-        if (!uri.host.equals(HeluxConfig.HOST, ignoreCase = true)) {
-            return ScanResult.Rejected("This QR code is not for ${HeluxConfig.HOST}.")
+        val host = uri.host?.lowercase()
+        if (host.isNullOrEmpty()) {
+            return ScanResult.Rejected("This is not a valid URL.")
+        }
+        if (expectedHost != null && !host.equals(expectedHost.lowercase())) {
+            // Already paired: refuse a different origin outright rather than
+            // silently re-pairing this device to another server.
+            return ScanResult.Rejected("This device is paired with $expectedHost. To switch servers, use “Pair again” on the main screen.")
         }
         if (uri.port != -1 && uri.port != 443) {
             return ScanResult.Rejected("The pairing code uses an unexpected port.")
@@ -69,8 +84,8 @@ object LaunchUrlValidator {
         }
 
         // Rebuild from scratch so nothing but host + token reaches the WebView.
-        val url = "https://${HeluxConfig.HOST}/?${HeluxConfig.TOKEN_PARAM}=${encodeQueryValue(token)}"
-        return ScanResult.Launch(url)
+        val url = "https://$host/?${HeluxConfig.TOKEN_PARAM}=${encodeQueryValue(token)}"
+        return ScanResult.Launch(url, host)
     }
 
     /**

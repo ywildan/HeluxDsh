@@ -41,11 +41,15 @@ class MainActivity : AppCompatActivity() {
     /** Set while the one-time tokenized URL is in flight; cleared right after. */
     private var pendingLaunchUrl: String? = null
 
+    /** Hostname the in-flight launch URL belongs to; recorded once it lands. */
+    private var pendingAuthority: String? = null
+
     private val scanLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
         val data = result.data ?: return@registerForActivityResult
         val launchUrl = data.getStringExtra(ScanActivity.EXTRA_LAUNCH_URL) ?: return@registerForActivityResult
-        openLaunchUrl(launchUrl)
+        val authority = data.getStringExtra(ScanActivity.EXTRA_AUTHORITY) ?: return@registerForActivityResult
+        openLaunchUrl(launchUrl, authority)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -86,15 +90,21 @@ class MainActivity : AppCompatActivity() {
      * Launch the QR scanner.
      */
     private fun startScan() {
-        scanLauncher.launch(Intent(this, ScanActivity::class.java))
+        // The scanner enforces the pairing: with an authority recorded it only
+        // accepts a QR for that host.
+        scanLauncher.launch(
+            Intent(this, ScanActivity::class.java)
+                .putExtra(ScanActivity.EXTRA_EXPECTED_HOST, store.authority()),
+        )
     }
 
     /**
      * Load a validated launch URL exactly once, then forget it.
      * @param launchUrl URL produced by [LaunchUrlValidator].
      */
-    private fun openLaunchUrl(launchUrl: String) {
+    private fun openLaunchUrl(launchUrl: String, authority: String) {
         pendingLaunchUrl = launchUrl
+        pendingAuthority = authority
         showWebView()
         webView.loadUrl(launchUrl)
     }
@@ -145,8 +155,9 @@ class MainActivity : AppCompatActivity() {
     private fun handleStatusAction() {
         when (currentStatusAction) {
             StatusAction.RETRY -> {
+                val authority = store.authority() ?: return
                 showWebView()
-                webView.loadUrl(HeluxConfig.HOME_URL)
+                webView.loadUrl(HeluxConfig.homeUrl(authority))
             }
             StatusAction.REPAIR -> {
                 store.clear()
@@ -166,7 +177,8 @@ class MainActivity : AppCompatActivity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
             // Any off-host navigation opens in the system browser instead.
-            return if (!url.host.equals(HeluxConfig.HOST, ignoreCase = true)) {
+            val paired = store.authority()
+            return if (paired == null || !url.host.equals(paired, ignoreCase = true)) {
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, url))
                 } catch (_: Exception) {
@@ -184,8 +196,9 @@ class MainActivity : AppCompatActivity() {
             val pending = pendingLaunchUrl
             if (pending != null && url != null && !url.contains("${HeluxConfig.TOKEN_PARAM}=")) {
                 pendingLaunchUrl = null
+                pendingAuthority?.let { store.markPaired(it) }
+                pendingAuthority = null
                 view.clearHistory()
-                store.markPaired()
             }
         }
 
@@ -226,7 +239,7 @@ class MainActivity : AppCompatActivity() {
             if (!request.isForMainFrame) return
             showStatus(
                 getString(R.string.status_offline_title),
-                getString(R.string.status_offline_body),
+                getString(R.string.status_offline_body, store.authority() ?: ""),
                 getString(R.string.status_retry_action),
                 StatusAction.RETRY,
             )

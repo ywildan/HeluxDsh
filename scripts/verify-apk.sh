@@ -10,8 +10,8 @@
 set -euo pipefail
 
 APK="${1:?usage: verify-apk.sh <path-to-apk>}"
-EXPECTED_VERSION_CODE="${EXPECTED_VERSION_CODE:-3}"
-EXPECTED_VERSION_NAME="${EXPECTED_VERSION_NAME:-1.0.2}"
+EXPECTED_VERSION_CODE="${EXPECTED_VERSION_CODE:-4}"
+EXPECTED_VERSION_NAME="${EXPECTED_VERSION_NAME:-1.1.0}"
 
 test -f "$APK" || { echo "::error::missing APK: $APK"; exit 1; }
 

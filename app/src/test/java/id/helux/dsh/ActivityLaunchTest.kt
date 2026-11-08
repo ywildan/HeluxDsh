@@ -45,7 +45,7 @@ class ActivityLaunchTest {
 
     @Test
     fun mainActivityShowsStatusPanelWhenPairedButOffline() {
-        PairingStore(ApplicationProvider.getApplicationContext()).markPaired()
+        PairingStore(ApplicationProvider.getApplicationContext()).markPaired("helux.web.id")
 
         val controller = Robolectric.buildActivity(MainActivity::class.java)
         val activity = controller.setup().get()
