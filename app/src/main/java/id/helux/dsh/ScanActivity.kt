@@ -45,6 +45,12 @@ class ScanActivity : AppCompatActivity() {
     private var analysisExecutor: ExecutorService? = null
     private val delivered = AtomicBoolean(false)
 
+    /** Reused across frames; the analyzer runs on a single thread. */
+    private val reader = MultiFormatReader().apply {
+        setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE)))
+    }
+
+
     private val requestCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startCamera() else showPermissionDenied()
     }
@@ -118,25 +124,28 @@ class ScanActivity : AppCompatActivity() {
 
     /**
      * Decode one camera frame and deliver the first valid payload.
+     *
+     * Camera frames are not tightly packed (the Y plane usually has
+     * `rowStride > width`) and are rotated relative to the screen, while ZXing
+     * decodes an upright packed image only. Both are corrected here. A bad
+     * frame is skipped rather than allowed to kill the app.
+     *
      * @param proxy frame supplied by CameraX; always closed here.
      */
     private fun analyze(proxy: ImageProxy) {
         try {
             if (delivered.get()) return
-            val bytes = proxy.planes[0].buffer.toByteArray()
+            val frame = proxy.toUprightLuminance() ?: return
             val source = PlanarYUVLuminanceSource(
-                bytes,
-                proxy.width,
-                proxy.height,
+                frame.data,
+                frame.width,
+                frame.height,
                 0,
                 0,
-                proxy.width,
-                proxy.height,
+                frame.width,
+                frame.height,
                 false,
             )
-            val reader = MultiFormatReader().apply {
-                setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE)))
-            }
             val bitmap = BinaryBitmap(HybridBinarizer(source))
             val result = try {
                 reader.decodeWithState(bitmap)
@@ -148,9 +157,22 @@ class ScanActivity : AppCompatActivity() {
             if (result != null && delivered.compareAndSet(false, true)) {
                 deliver(result.text)
             }
+        } catch (_: Throwable) {
+            // A malformed or unsupported frame must never take the app down.
         } finally {
             proxy.close()
         }
+    }
+
+    /**
+     * Copy the Y plane into a packed buffer and rotate it upright.
+     * @return the upright frame, or null when the frame carries no usable plane.
+     */
+    private fun ImageProxy.toUprightLuminance(): FrameRotation.Frame? {
+        val plane = planes.firstOrNull() ?: return null
+        if (width <= 0 || height <= 0) return null
+        val packed = FrameRotation.pack(plane.buffer, width, height, plane.rowStride, plane.pixelStride)
+        return FrameRotation.rotate(packed, width, height, imageInfo.rotationDegrees)
     }
 
     /**
@@ -178,16 +200,5 @@ class ScanActivity : AppCompatActivity() {
         cameraProvider?.unbindAll()
         analysisExecutor?.shutdown()
         super.onDestroy()
-    }
-
-    /**
-     * Copy a frame buffer without touching its position.
-     * @return the frame bytes.
-     */
-    private fun java.nio.ByteBuffer.toByteArray(): ByteArray {
-        val duplicate = duplicate()
-        val bytes = ByteArray(duplicate.remaining())
-        duplicate.get(bytes)
-        return bytes
     }
 }

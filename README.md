@@ -84,6 +84,28 @@ Requires JDK 17 and the Android SDK (platform 34, build-tools 34):
 # app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Troubleshooting
+
+**The app closes immediately after tapping "Scan QR code".**
+Fixed in 1.0.1: `ScanActivity` was missing from `AndroidManifest.xml`, so the
+explicit `Intent` threw `ActivityNotFoundException`. Every launched component
+must be declared; `scripts/check-manifest.py` now fails the build if one is not.
+
+**Scanning finds nothing even though the QR is clearly in view.**
+The camera delivers padded frames rotated against the screen. `FrameRotation`
+packs the Y plane (ignoring `rowStride`) and rotates by
+`ImageInfo.rotationDegrees` before ZXing sees it; `FrameRotationTest` covers all
+four rotations against hand-checked patterns.
+
+**Capturing a crash log**
+
+```bash
+adb logcat -c
+adb logcat | grep -E "AndroidRuntime|id.helux.dsh"
+```
+
+Look for the first `FATAL EXCEPTION` block - it names the exact class and line.
+
 ## Project layout
 
 | Path | Purpose |
@@ -92,8 +114,11 @@ Requires JDK 17 and the Android SDK (platform 34, build-tools 34):
 | `app/src/main/java/id/helux/dsh/LaunchUrlValidator.kt` | Strict QR payload validation |
 | `app/src/main/java/id/helux/dsh/ScanActivity.kt` | CameraX + ZXing scanner, one-shot delivery |
 | `app/src/main/java/id/helux/dsh/MainActivity.kt` | Pairing screen, WebView, status panels |
+| `app/src/main/java/id/helux/dsh/FrameRotation.kt` | Packs padded planes and rotates frames upright |
 | `app/src/main/java/id/helux/dsh/PairingStore.kt` | Remembers the paired hostname only |
 | `app/src/test/java/id/helux/dsh/LaunchUrlValidatorTest.kt` | 14 validation cases |
+| `app/src/test/java/id/helux/dsh/FrameRotationTest.kt` | 11 frame geometry cases |
+| `scripts/check-manifest.py` | Fails the build when a launched component is undeclared |
 
 ## Pairing checklist
 

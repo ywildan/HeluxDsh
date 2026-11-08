@@ -29,6 +29,17 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Launched by an explicit Intent from MainActivity. Must be declared or
+          startActivity throws ActivityNotFoundException and the app force
+          closes as soon as the user taps "Scan QR code".
+        -->
+        <activity
+            android:name=".ScanActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.HeluxDsh" />
+
     </application>
 
 </manifest>
