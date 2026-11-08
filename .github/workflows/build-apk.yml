@@ -85,13 +85,23 @@ jobs:
           done
           echo "APK declares MainActivity and ScanActivity"
 
-          expected="$(printf 'android.permission.CAMERA\nandroid.permission.INTERNET')"
-          if [ "$REQUESTED" != "$expected" ]; then
-            echo "::error::requested permissions differ from CAMERA + INTERNET"
-            echo "::error::actual: $(echo "$REQUESTED" | tr '\n' ' ')"
+          # AGP injects <applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+          # for every app targeting SDK 33+, so dynamically registered receivers
+          # default to NOT_EXPORTED. It is a signature-level permission the
+          # system grants automatically and users never see it. Everything else
+          # must be exactly CAMERA + INTERNET.
+          ALLOWED_EXTRA="id.helux.dsh.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          unexpected="$(echo "$REQUESTED" | grep -v -x -F -e 'android.permission.CAMERA' \
+            -e 'android.permission.INTERNET' -e "$ALLOWED_EXTRA" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::unexpected permissions in the APK: $(echo "$unexpected" | tr '\n' ' ')"
             exit 1
           fi
-          echo "APK requests exactly CAMERA + INTERNET"
+          for required in android.permission.CAMERA android.permission.INTERNET; do
+            echo "$REQUESTED" | grep -q -x -F "$required" \
+              || { echo "::error::$required is missing from the APK"; exit 1; }
+          done
+          echo "APK requests CAMERA + INTERNET and nothing user-visible beyond that"
 
           if ! grep -q "android:name=\"id.helux.dsh.ScanActivity\"" "$RUNNER_TEMP/manifest.txt" \
              && ! grep -q "id.helux.dsh.ScanActivity\"" "$RUNNER_TEMP/manifest.txt"; then
