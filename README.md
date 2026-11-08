@@ -1,7 +1,8 @@
 # Helux DSH (Android)
 
-A small Android app that pairs with the **Helux Tunnel** DSH plugin by scanning a
-QR code, then opens your DSH Web UI at `https://helux.web.id`.
+A small Android app that pairs with the **[Helux Tunnel](https://github.com/ywildan/dsh-tunnel)**
+DSH plugin by scanning a QR code, then opens your DSH Web UI at
+`https://helux.web.id`.
 
 Pairing replaces copying a launch token by hand: the panel draws the token as a
 QR, this app scans it once, DSH exchanges the token for a cookie, and every later
@@ -48,13 +49,14 @@ a debug APK, and uploads it as an artifact.
 git init
 git add .
 git commit -m "Helux DSH Android app"
-git remote add origin git@github.com:<you>/HeluxDsh.git
+git remote add origin git@github.com:ywildan/HeluxDsh.git
 git push -u origin main
 ```
 
-Then open **Actions → Build APK → Run workflow** (it also runs on every push to
-`main`). When it finishes, download **`helux-dsh-debug-apk`** from the run's
-*Artifacts* section and install it on the phone.
+Then open **[Actions → Build APK](https://github.com/ywildan/HeluxDsh/actions/workflows/build-apk.yml)**
+and press *Run workflow* (it also runs on every push to `main`). When it
+finishes, download **`helux-dsh-debug-apk`** from the run's *Artifacts* section
+and install it on the phone.
 
 > The debug APK is signed with the standard Android debug key, so it installs
 > with "install from unknown sources" enabled. For a release build, add your own
