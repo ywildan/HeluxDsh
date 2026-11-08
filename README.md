@@ -1,5 +1,7 @@
 # Helux DSH (Android)
 
+[![Build APK](https://github.com/ywildan/HeluxDsh/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ywildan/HeluxDsh/actions/workflows/build-apk.yml)
+
 A small Android app that pairs with the **[Helux Tunnel](https://github.com/ywildan/dsh-tunnel)**
 DSH plugin by scanning a QR code, then opens your DSH Web UI at
 `https://helux.web.id`.
@@ -57,6 +59,15 @@ Then open **[Actions → Build APK](https://github.com/ywildan/HeluxDsh/actions/
 and press *Run workflow* (it also runs on every push to `main`). When it
 finishes, download **`helux-dsh-debug-apk`** from the run's *Artifacts* section
 and install it on the phone.
+
+Or fetch the latest successful build from the command line:
+
+```bash
+gh run download --repo ywildan/HeluxDsh \
+  --name helux-dsh-debug-apk --dir ~/Downloads/helux-apk
+unzip -o ~/Downloads/helux-apk/*.zip -d ~/Downloads/helux-apk
+# ~/Downloads/helux-apk/app-debug.apk
+```
 
 > The debug APK is signed with the standard Android debug key, so it installs
 > with "install from unknown sources" enabled. For a release build, add your own
