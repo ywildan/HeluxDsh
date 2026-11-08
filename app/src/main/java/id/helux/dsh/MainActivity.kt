@@ -176,18 +176,20 @@ class MainActivity : AppCompatActivity() {
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url
-            // Any off-host navigation opens in the system browser instead.
-            val paired = store.authority()
-            return if (paired == null || !url.host.equals(paired, ignoreCase = true)) {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, url))
-                } catch (_: Exception) {
-                    // No browser installed; keep the user where they are.
-                }
-                true
-            } else {
-                false
+            // The authority from an in-flight scan counts immediately: DSH's 303
+            // from "/?token=..." to "./" arrives before markPaired() has stored
+            // anything, and treating it as off-host sent the clean URL to the
+            // system browser, which answered "dsh web authentication required".
+            if (NavigationPolicy.staysInWebView(url.host, pendingAuthority, store.authority())) {
+                return false
             }
+            // Any genuinely off-host navigation opens in the system browser.
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, url))
+            } catch (_: Exception) {
+                // No browser installed; keep the user where they are.
+            }
+            return true
         }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {

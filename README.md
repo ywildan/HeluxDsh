@@ -224,3 +224,16 @@ generates a new launch token per process.
 
 [MIT](LICENSE). Build it, sign it with your own key, and pair it with your own
 tunnel.
+
+## Known-issue fix: first pairing opened Chrome
+
+DSH answers `https://<host>/?token=…` with a `303` to `./`. The WebView client
+decided whether that redirect stayed in-app by comparing it against the
+*stored* paired authority - which is still empty on a first pairing. The
+redirect therefore looked like an off-host link and was handed to the system
+browser, which loaded the clean URL without its token and answered
+`dsh web authentication required`.
+
+The authority from the in-flight scan now counts immediately, so the redirect
+stays in the WebView and the cookie is minted there. See
+`NavigationPolicy` and its tests.
