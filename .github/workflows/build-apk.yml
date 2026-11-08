@@ -57,47 +57,51 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 
-      # Proves the shipped APK itself declares every component and the
-      # version we think it is - not just that the sources compile.
+      # Proves the shipped APK itself declares every component and the version
+      # we think it is - compiling is not proof. Note that `dump xmltree` shows
+      # every occurrence of "android.permission.*", including the
+      # android:permission attribute on library receivers; only
+      # `dump permissions` lists what the app actually requests.
       - name: Verify contents of the built APK
         run: |
           set -euo pipefail
           AAPT2="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)"
           APK=app/build/outputs/apk/debug/app-debug.apk
+
           "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest.txt"
+          "$AAPT2" dump permissions "$APK" > "$RUNNER_TEMP/permissions.txt"
 
-          # Surface the truth first: these notices are readable without log access.
-          PERMS="$(grep -o 'android.permission.[A-Z_]*' "$RUNNER_TEMP/manifest.txt" | sort -u | tr '\n' ' ')"
-          COMPONENTS="$(grep -o 'id.helux.dsh.[A-Za-z]*' "$RUNNER_TEMP/manifest.txt" | sort -u | tr '\n' ' ')"
-          echo "::notice::APK permissions: ${PERMS:-none}"
+          COMPONENTS="$(grep -o 'id\.helux\.dsh\.[A-Za-z]*' "$RUNNER_TEMP/manifest.txt" | sort -u | tr '\n' ' ')"
+          REQUESTED="$(sed -n "s/^uses-permission: name='\(.*\)'/\1/p" "$RUNNER_TEMP/permissions.txt" | sort -u)"
+          VERSION="$(grep -o "versionCode='[0-9]*'" <<< "$("$AAPT2" dump badging "$APK")")"
+
           echo "::notice::APK components: ${COMPONENTS:-none}"
-          echo "::notice::APK versionCode: $("$AAPT2" dump badging "$APK" | grep -o "versionCode='[0-9]*'")"
-
-          MERGED="$(find app/build/intermediates -name AndroidManifest.xml -path '*merged*' | head -1)"
-          if [ -n "$MERGED" ]; then
-            echo "::notice::merged manifest: $MERGED"
-            echo "::notice::merged permissions: $(grep -o 'android.permission.[A-Z_]*' "$MERGED" | sort -u | tr '\n' ' ')"
-          fi
+          echo "::notice::APK requested permissions: $(echo "$REQUESTED" | tr '\n' ' ')"
+          echo "::notice::APK versionCode: ${VERSION}"
 
           for component in MainActivity ScanActivity; do
-            if ! grep -q "id.helux.dsh.$component" "$RUNNER_TEMP/manifest.txt"; then
-              echo "::error::$component is missing from the APK manifest"
-              exit 1
-            fi
+            grep -q "id.helux.dsh.$component" "$RUNNER_TEMP/manifest.txt" \
+              || { echo "::error::$component is missing from the APK manifest"; exit 1; }
           done
-          echo "APK declares both activities"
+          echo "APK declares MainActivity and ScanActivity"
 
-          grep -q 'android.permission.CAMERA' "$RUNNER_TEMP/manifest.txt" \
-            || { echo "::error::CAMERA permission missing from the APK"; exit 1; }
-          grep -q 'android.permission.INTERNET' "$RUNNER_TEMP/manifest.txt" \
-            || { echo "::error::INTERNET permission missing from the APK"; exit 1; }
-
-          extra="$(printf '%s' "$PERMS" | tr ' ' '\n' | grep -v -E '^(CAMERA|INTERNET)?$' | grep -v -E '^(CAMERA|INTERNET)$' || true)"
-          if [ -n "$extra" ]; then
-            echo "::error::unexpected permissions in the APK: $(echo "$extra" | tr '\n' ' ')"
+          expected="$(printf 'android.permission.CAMERA\nandroid.permission.INTERNET')"
+          if [ "$REQUESTED" != "$expected" ]; then
+            echo "::error::requested permissions differ from CAMERA + INTERNET"
+            echo "::error::actual: $(echo "$REQUESTED" | tr '\n' ' ')"
             exit 1
           fi
-          echo "APK permissions are exactly CAMERA + INTERNET"
+          echo "APK requests exactly CAMERA + INTERNET"
+
+          if ! grep -q "android:name=\"id.helux.dsh.ScanActivity\"" "$RUNNER_TEMP/manifest.txt" \
+             && ! grep -q "id.helux.dsh.ScanActivity\"" "$RUNNER_TEMP/manifest.txt"; then
+            echo "::error::ScanActivity is present but not as a declared activity"
+            exit 1
+          fi
+
+          [ "$VERSION" = "versionCode='2'" ] \
+            || { echo "::error::unexpected versionCode: $VERSION"; exit 1; }
+          echo "APK versionCode is 2"
 
       - name: Report APK
         run: |
