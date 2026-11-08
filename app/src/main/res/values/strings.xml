@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Helux DSH</string>
+
+    <!-- Pairing screen -->
+    <string name="pairing_title">Pair this device</string>
+    <string name="pairing_body">Open the Helux Tunnel panel on your computer, turn the tunnel ON, then press “Pair device (QR)” and scan the code shown there.</string>
+    <string name="pairing_note">The code is only valid until DSH restarts. It works like a password - never share a screenshot of it.</string>
+    <string name="pairing_scan">Scan QR code</string>
+
+    <!-- Scanner -->
+    <string name="scan_title">Scan the pairing code</string>
+    <string name="scan_hint">Point the camera at the QR code in the Helux Tunnel panel.</string>
+    <string name="scan_cancel">Cancel</string>
+    <string name="scan_permission_explainer">The camera is used only to read the pairing QR code. Nothing is uploaded and no photo is saved.</string>
+    <string name="scan_permission_grant">Allow camera</string>
+    <string name="scan_camera_failed">Could not start the camera on this device.</string>
+
+    <!-- Status panels -->
+    <string name="status_auth_title">This device is no longer paired</string>
+    <string name="status_auth_body">DSH rejected the saved session, usually because the pairing expired or DSH was reset. Scan a new QR code to pair again.</string>
+    <string name="status_repair_action">Pair again</string>
+    <string name="status_offline_title">Tunnel is not reachable</string>
+    <string name="status_offline_body">helux.web.id did not answer. Check that the tunnel is ON in the Helux Tunnel panel and that this device has internet access.</string>
+    <string name="status_retry_action">Try again</string>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="helux_bg">#0B0F14</color>
+    <color name="helux_surface">#141A21</color>
+    <color name="helux_on_surface">#E8EDF2</color>
+    <color name="helux_muted">#93A1B0</color>
+    <color name="helux_accent">#2F81F7</color>
+    <color name="helux_warn">#E3B341</color>
+</resources>

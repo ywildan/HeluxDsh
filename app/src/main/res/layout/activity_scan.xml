@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/helux_bg">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:id="@+id/scan_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_margin="20dp"
+        android:background="@color/helux_surface"
+        android:padding="14dp"
+        android:textColor="@color/helux_on_surface"
+        android:textSize="14sp"
+        android:text="@string/scan_hint" />
+
+    <Button
+        android:id="@+id/cancel_scan"
+        style="@style/HeluxButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="28dp"
+        android:backgroundTint="@color/helux_surface"
+        android:text="@string/scan_cancel" />
+
+    <LinearLayout
+        android:id="@+id/permission_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@color/helux_bg"
+        android:padding="28dp"
+        android:visibility="gone">
+
+        <TextView
+            style="@style/HeluxBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scan_permission_explainer" />
+
+        <Button
+            android:id="@+id/grant_camera"
+            style="@style/HeluxButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="@string/scan_permission_grant" />
+    </LinearLayout>
+</FrameLayout>

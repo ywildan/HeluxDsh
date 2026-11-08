@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Foreground layer for the adaptive launcher icon. The 108dp canvas keeps the
+  artwork inside the 72dp safe zone: everything is drawn within x/y 22..86.
+  Shape mirrors the Helux Tunnel panel icon (an arch over a ground line).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer arch -->
+    <path
+        android:pathData="M30,78 L30,56 A24,24 0 0 1 78,56 L78,78"
+        android:strokeColor="#3B82F6"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+
+    <!-- Inner arch -->
+    <path
+        android:pathData="M45,78 L45,58 A9,9 0 0 1 63,58 L63,78"
+        android:strokeColor="#7CE3C0"
+        android:strokeWidth="6"
+        android:strokeLineCap="round" />
+
+    <!-- Ground line -->
+    <path
+        android:pathData="M24,78 L84,78"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+</vector>

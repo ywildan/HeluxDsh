@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.HeluxDsh" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/helux_bg</item>
+        <item name="android:statusBarColor">@color/helux_bg</item>
+        <item name="android:navigationBarColor">@color/helux_bg</item>
+        <item name="android:textColorPrimary">@color/helux_on_surface</item>
+        <item name="android:textColorSecondary">@color/helux_muted</item>
+        <item name="colorAccent">@color/helux_accent</item>
+    </style>
+
+    <style name="HeluxTitle">
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/helux_on_surface</item>
+    </style>
+
+    <style name="HeluxBody">
+        <item name="android:textSize">15sp</item>
+        <item name="android:lineSpacingMultiplier">1.35</item>
+        <item name="android:textColor">@color/helux_muted</item>
+    </style>
+
+    <style name="HeluxButton" parent="Widget.AppCompat.Button.Colored">
+        <item name="android:backgroundTint">@color/helux_accent</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:minHeight">48dp</item>
+    </style>
+</resources>
