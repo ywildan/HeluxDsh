@@ -83,7 +83,16 @@ class MainActivity : AppCompatActivity() {
         }
         webView.webViewClient = TunnelWebViewClient()
 
-        if (store.isPaired()) showWebView() else showPairing()
+        // A paired device must load the page here, not only reveal the WebView.
+        // This used to call showWebView() alone, so every cold start after the
+        // app was swiped away from Recents left an empty WebView: no page, no
+        // pairing panel, no status panel - just a black screen.
+        if (store.isPaired()) {
+            showWebView()
+            loadHome()
+        } else {
+            showPairing()
+        }
     }
 
     /**
@@ -107,6 +116,25 @@ class MainActivity : AppCompatActivity() {
         pendingAuthority = authority
         showWebView()
         webView.loadUrl(launchUrl)
+    }
+
+    /**
+     * Load the paired host's home page in the WebView.
+     *
+     * The session cookie was minted during pairing and flushed to the WebView's
+     * cookie store, so this request is authenticated. A 401 means the cookie is
+     * gone, and [TunnelWebViewClient] turns that into the repair prompt.
+     *
+     * Falls back to the pairing screen if no authority is recorded, so a paired
+     * flag without a hostname can never strand the user on an empty WebView.
+     */
+    private fun loadHome() {
+        val authority = store.authority()
+        if (authority == null) {
+            showPairing()
+            return
+        }
+        webView.loadUrl(HeluxConfig.homeUrl(authority))
     }
 
     /**
@@ -155,9 +183,8 @@ class MainActivity : AppCompatActivity() {
     private fun handleStatusAction() {
         when (currentStatusAction) {
             StatusAction.RETRY -> {
-                val authority = store.authority() ?: return
                 showWebView()
-                webView.loadUrl(HeluxConfig.homeUrl(authority))
+                loadHome()
             }
             StatusAction.REPAIR -> {
                 store.clear()

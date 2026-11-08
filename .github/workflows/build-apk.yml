@@ -36,8 +36,8 @@ jobs:
     env:
       # Kept in one place: both APKs are verified against these values, so a
       # version bump that misses one file fails the build instead of shipping.
-      EXPECTED_VERSION_CODE: "5"
-      EXPECTED_VERSION_NAME: "1.1.1"
+      EXPECTED_VERSION_CODE: "6"
+      EXPECTED_VERSION_NAME: "1.1.2"
 
     steps:
       - name: Check out

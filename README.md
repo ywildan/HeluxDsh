@@ -237,3 +237,17 @@ browser, which loaded the clean URL without its token and answered
 The authority from the in-flight scan now counts immediately, so the redirect
 stays in the WebView and the cookie is minted there. See
 `NavigationPolicy` and its tests.
+
+## Known-issue fix: black screen after reopening
+
+Opening the app after swiping it away from Recents showed an empty black
+screen - no chat, no pairing panel, no buttons.
+
+`onCreate` revealed the WebView for a paired device but never navigated. The
+only two `loadUrl` calls were the one-off tokenized URL during pairing and the
+retry button on the status panel, so a plain cold start had nothing to render.
+The WebView is now sent to the paired host on every start, and the existing 401
+handling turns an expired cookie into the repair prompt instead of a blank page.
+
+The regression test asserts `webView.url`, not just visibility: the previous
+test passed on a visible-but-empty WebView, which is exactly the bug.

@@ -55,6 +55,56 @@ class ActivityLaunchTest {
         controller.pause().stop().destroy()
     }
 
+    /**
+     * Regression: a paired device reopened after being swiped away from Recents
+     * showed a bare black screen. onCreate() revealed the WebView without ever
+     * loading anything, and the test above passed anyway because it only
+     * checked visibility - a visible but empty WebView is still a blank screen.
+     */
+    @Test
+    fun pairedColdStartLoadsTheHomePage() {
+        PairingStore(ApplicationProvider.getApplicationContext()).markPaired("dsh.example.com")
+
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
+        val activity = controller.setup().get()
+
+        val webView = activity.findViewById<android.webkit.WebView>(R.id.webview)
+        assertEquals(0, webView.visibility)
+        assertEquals(
+            "a paired cold start must navigate, not just reveal an empty WebView",
+            "https://dsh.example.com/",
+            webView.url,
+        )
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun everyColdStartRequestsAPage() {
+        PairingStore(ApplicationProvider.getApplicationContext()).markPaired("helux.web.id")
+
+        // Two launches in a row stand in for "killed from Recents, opened again".
+        repeat(2) {
+            val controller = Robolectric.buildActivity(MainActivity::class.java)
+            val webView = controller.setup().get().findViewById<android.webkit.WebView>(R.id.webview)
+            assertEquals("launch ${it + 1} must load a page", "https://helux.web.id/", webView.url)
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test
+    fun aPairedFlagWithoutAHostnameFallsBackToPairing() {
+        // Defensive: a corrupt or half-written preference must never strand the
+        // user on an empty WebView.
+        val store = PairingStore(ApplicationProvider.getApplicationContext())
+        store.markPaired("placeholder.example")
+        store.clear()
+        // isPaired() is false here, so the pairing panel is the expected surface.
+        val controller = Robolectric.buildActivity(MainActivity::class.java)
+        val activity = controller.setup().get()
+        assertEquals(0, activity.findViewById<View>(R.id.pairing_panel).visibility)
+        controller.pause().stop().destroy()
+    }
+
     @Test
     fun mainActivityStatusPanelRendersText() {
         PairingStore(ApplicationProvider.getApplicationContext()).clear()
