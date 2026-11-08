@@ -12,7 +12,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
-import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -30,8 +29,10 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var pairingPanel: FrameLayout
-    private lateinit var statusPanel: FrameLayout
+    // Typed as View on purpose: only visibility changes, so the panel root
+    // element (ScrollView / LinearLayout / FrameLayout) can change freely.
+    private lateinit var pairingPanel: View
+    private lateinit var statusPanel: View
     private lateinit var statusTitle: TextView
     private lateinit var statusBody: TextView
     private lateinit var statusAction: Button

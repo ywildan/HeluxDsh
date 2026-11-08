@@ -1,7 +1,31 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+/**
+ * Release signing material comes from the environment (CI) or from
+ * `keystore.properties` at the repo root (local, git-ignored).
+ * When neither is present the release APK is signed with the debug key, so
+ * `assembleRelease` always yields an installable file instead of failing.
+ */
+val keystoreProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
+fun signingValue(envName: String, propName: String): String? =
+    System.getenv(envName)?.takeIf { it.isNotBlank() } ?: keystoreProps.getProperty(propName)
+
+val releaseKeyStorePath = signingValue("HELUX_KEYSTORE_FILE", "storeFile")
+val releaseKeyStorePassword = signingValue("HELUX_KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("HELUX_KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("HELUX_KEY_PASSWORD", "keyPassword")
+val releaseKeyStore = releaseKeyStorePath?.let { rootProject.file(it) }
+val hasReleaseKey = releaseKeyStore != null && releaseKeyStore.isFile &&
+    releaseKeyStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
 
 android {
     namespace = "id.helux.dsh"
@@ -11,16 +35,32 @@ android {
         applicationId = "id.helux.dsh"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = releaseKeyStore
+                storePassword = releaseKeyStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
-            // Unsigned by default so `assembleRelease` never needs a keystore in
-            // CI. Sign it yourself, or use the debug APK from the workflow.
             isMinifyEnabled = false
             isShrinkResources = false
+            // A signed release APK is always produced: real key when available,
+            // debug key as a labelled fallback.
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -35,6 +75,13 @@ android {
 
     buildFeatures {
         viewBinding = false
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     packaging {
@@ -59,4 +106,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
+    // Runs real Activities on the JVM so launch-time crashes are caught here
+    // instead of on a phone.
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
 }

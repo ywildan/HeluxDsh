@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
-import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -39,7 +38,8 @@ class ScanActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var statusText: TextView
-    private lateinit var permissionPanel: FrameLayout
+    /** Typed as View: only visibility changes, not the panel's root type. */
+    private lateinit var permissionPanel: View
     private lateinit var grantButton: Button
     private var cameraProvider: ProcessCameraProvider? = null
     private var analysisExecutor: ExecutorService? = null

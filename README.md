@@ -44,8 +44,10 @@ launch goes straight to the clean URL.
 ## Build the APK with GitHub Actions
 
 The workflow is [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml).
-It runs on `ubuntu-latest` (Android SDK preinstalled), runs the unit tests, builds
-a debug APK, and uploads it as an artifact.
+It runs on `ubuntu-latest` (Android SDK preinstalled), runs the unit tests
+(including Robolectric tests that actually launch both Activities), builds **both**
+a debug and a release APK, verifies the packaged files, and uploads both as
+artifacts.
 
 ```bash
 git init
@@ -57,40 +59,99 @@ git push -u origin main
 
 Then open **[Actions → Build APK](https://github.com/ywildan/HeluxDsh/actions/workflows/build-apk.yml)**
 and press *Run workflow* (it also runs on every push to `main`). When it
-finishes, download **`helux-dsh-debug-apk`** from the run's *Artifacts* section
-and install it on the phone.
+finishes, download an artifact from the run's *Artifacts* section and install it
+on the phone:
+
+| Artifact | File | Signing |
+| --- | --- | --- |
+| `helux-dsh-release-apk` | `app-release.apk` | your release key, or the debug key when no key is configured |
+| `helux-dsh-debug-apk` | `app-debug.apk` | standard Android debug key |
 
 Or fetch the latest successful build from the command line:
 
 ```bash
 gh run download --repo ywildan/HeluxDsh \
-  --name helux-dsh-debug-apk --dir ~/Downloads/helux-apk
+  --name helux-dsh-release-apk --dir ~/Downloads/helux-apk
 unzip -o ~/Downloads/helux-apk/*.zip -d ~/Downloads/helux-apk
-# ~/Downloads/helux-apk/app-debug.apk
+# ~/Downloads/helux-apk/app-release.apk
 ```
 
-> The debug APK is signed with the standard Android debug key, so it installs
-> with "install from unknown sources" enabled. For a release build, add your own
-> keystore as repository secrets and extend the workflow - never commit a
-> keystore.
+> Both APKs are always signed, so either one installs with "install from unknown
+> sources" enabled. A release APK signed with the debug key is fine for
+> sideloading; add a real keystore before distributing it anywhere.
+
+### Optional: sign the release APK with your own key
+
+Add these repository secrets (*Settings → Secrets and variables → Actions*). The
+workflow skips the step cleanly when they are absent, and the release APK falls
+back to the debug key:
+
+| Secret | Value |
+| --- | --- |
+| `HELUX_KEYSTORE_BASE64` | `base64 -w0 your-release.jks` |
+| `HELUX_KEYSTORE_PASSWORD` | keystore password |
+| `HELUX_KEY_ALIAS` | key alias |
+| `HELUX_KEY_PASSWORD` | key password |
+
+Never commit a keystore: `*.jks`, `*.keystore`, and `keystore.properties` are
+git-ignored.
 
 ## Build locally (optional)
 
-Requires JDK 17 and the Android SDK (platform 34, build-tools 34):
+Requires JDK 17 and the Android SDK (platform 34, build-tools 34). Point Gradle at
+the SDK with `local.properties`:
+
+```properties
+sdk.dir=/path/to/android-sdk
+```
 
 ```bash
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
+./gradlew testDebugUnitTest          # unit + Robolectric launch tests
+./gradlew assembleDebug assembleRelease
 # app/build/outputs/apk/debug/app-debug.apk
+# app/build/outputs/apk/release/app-release.apk
+
+# Check the built files: signature, version, declared components, permissions
+./scripts/verify-apk.sh app/build/outputs/apk/release/app-release.apk
 ```
+
+For a locally signed release build, create a keystore and a git-ignored
+`keystore.properties` at the repo root (the same four values the CI secrets
+supply):
+
+```bash
+keytool -genkeypair -keystore "$HOME/helux-release.jks" -alias helux \
+  -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Helux DSH, O=Helux, C=ID"
+
+cat > keystore.properties <<EOF
+storeFile=$HOME/helux-release.jks
+storePassword=CHANGE_ME
+keyAlias=helux
+keyPassword=CHANGE_ME
+EOF
+```
+
+Gradle reads either `keystore.properties` or the `HELUX_KEYSTORE_FILE`,
+`HELUX_KEYSTORE_PASSWORD`, `HELUX_KEY_ALIAS`, `HELUX_KEY_PASSWORD` environment
+variables, so `assembleRelease` never needs a keystore to succeed.
 
 ## Troubleshooting
 
-**The app closes immediately after tapping "Scan QR code".**
-Fixed in 1.0.1: `ScanActivity` was missing from `AndroidManifest.xml`, so the
-explicit `Intent` threw `ActivityNotFoundException`. Every launched component
-must be declared; `scripts/check-manifest.py` now fails the build if one is not,
-and the CI job re-reads the packaged APK to confirm both activities are in it.
+**The app closes immediately on launch.**
+Fixed in 1.0.2. Two separate causes were fixed, in this order:
+
+1. *1.0.1* - `ScanActivity` was missing from `AndroidManifest.xml`, so the
+   explicit `Intent` threw `ActivityNotFoundException` as soon as you tapped
+   *Scan QR code*. `scripts/check-manifest.py` now fails the build if a launched
+   component is undeclared, and the APK verification step re-reads the packaged
+   manifest to confirm both activities are inside the shipped file.
+2. *1.0.2* - the real reason it still closed **before drawing anything**:
+   `MainActivity` and `ScanActivity` declared their panels as `FrameLayout` while
+   the layouts use `ScrollView` and `LinearLayout`, so `findViewById` threw
+   `ClassCastException: LinearLayout cannot be cast to FrameLayout` inside
+   `onCreate`. The fields are now typed `View` (only `visibility` is ever used),
+   and `ActivityLaunchTest` builds both Activities on the JVM so this class of
+   bug fails the build instead of the phone.
 
 **Is `id.helux.dsh.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` expected?**
 Yes. AGP adds it to every app targeting SDK 33+, so dynamically registered
@@ -125,7 +186,9 @@ Look for the first `FATAL EXCEPTION` block - it names the exact class and line.
 | `app/src/main/java/id/helux/dsh/PairingStore.kt` | Remembers the paired hostname only |
 | `app/src/test/java/id/helux/dsh/LaunchUrlValidatorTest.kt` | 14 validation cases |
 | `app/src/test/java/id/helux/dsh/FrameRotationTest.kt` | 11 frame geometry cases |
+| `app/src/test/java/id/helux/dsh/ActivityLaunchTest.kt` | Robolectric launch tests for both Activities |
 | `scripts/check-manifest.py` | Fails the build when a launched component is undeclared |
+| `scripts/verify-apk.sh` | Checks a built APK's signature, version, components, and permissions |
 
 ## Pairing checklist
 

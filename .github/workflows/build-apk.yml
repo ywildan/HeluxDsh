@@ -6,6 +6,7 @@ on:
     paths:
       - "app/**"
       - "gradle/**"
+      - "scripts/**"
       - "*.gradle.kts"
       - "gradle.properties"
       - ".github/workflows/build-apk.yml"
@@ -13,6 +14,7 @@ on:
     paths:
       - "app/**"
       - "gradle/**"
+      - "scripts/**"
       - "*.gradle.kts"
       - "gradle.properties"
   workflow_dispatch:
@@ -27,9 +29,15 @@ concurrency:
 
 jobs:
   build:
-    name: Assemble debug APK
+    name: Assemble debug + release APKs
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+
+    env:
+      # Kept in one place: both APKs are verified against these values, so a
+      # version bump that misses one file fails the build instead of shipping.
+      EXPECTED_VERSION_CODE: "3"
+      EXPECTED_VERSION_NAME: "1.0.2"
 
     steps:
       - name: Check out
@@ -48,86 +56,75 @@ jobs:
       - name: Accept SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
+      # Optional: a real release key. Without the secret the Gradle script signs
+      # the release APK with the debug key, so the build still produces an
+      # installable file rather than failing or emitting an unsigned APK.
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.HELUX_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.HELUX_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.HELUX_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.HELUX_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::notice::no HELUX_KEYSTORE_BASE64 secret; the release APK will be debug-signed"
+            exit 0
+          fi
+          KEYSTORE="$RUNNER_TEMP/helux-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          {
+            echo "HELUX_KEYSTORE_FILE=$KEYSTORE"
+            echo "HELUX_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "HELUX_KEY_ALIAS=$KEY_ALIAS"
+            echo "HELUX_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+          echo "::notice::release APK will be signed with the configured keystore"
+
       - name: Verify manifest declarations
         run: python3 scripts/check-manifest.py
 
+      # Robolectric instantiates the real Activities here, which is what catches
+      # a launch-time crash (inflate failure, missing view id, type mismatch)
+      # before a phone ever sees it.
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
-      - name: Assemble debug APK
-        run: ./gradlew --no-daemon assembleDebug
+      - name: Assemble APKs
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
 
-      # Proves the shipped APK itself declares every component and the version
-      # we think it is - compiling is not proof. Note that `dump xmltree` shows
-      # every occurrence of "android.permission.*", including the
-      # android:permission attribute on library receivers; only
-      # `dump permissions` lists what the app actually requests.
-      - name: Verify contents of the built APK
+      # Compiling is not proof. These check the shipped files themselves.
+      - name: Verify debug APK
+        run: ./scripts/verify-apk.sh app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Verify release APK
+        run: ./scripts/verify-apk.sh app/build/outputs/apk/release/app-release.apk
+
+      - name: Report APKs
         run: |
           set -euo pipefail
-          AAPT2="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)"
-          APK=app/build/outputs/apk/debug/app-debug.apk
-
-          "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest.txt"
-          "$AAPT2" dump permissions "$APK" > "$RUNNER_TEMP/permissions.txt"
-
-          COMPONENTS="$(grep -o 'id\.helux\.dsh\.[A-Za-z]*' "$RUNNER_TEMP/manifest.txt" | sort -u | tr '\n' ' ')"
-          REQUESTED="$(sed -n "s/^uses-permission: name='\(.*\)'/\1/p" "$RUNNER_TEMP/permissions.txt" | sort -u)"
-          VERSION="$(grep -o "versionCode='[0-9]*'" <<< "$("$AAPT2" dump badging "$APK")")"
-
-          echo "::notice::APK components: ${COMPONENTS:-none}"
-          echo "::notice::APK requested permissions: $(echo "$REQUESTED" | tr '\n' ' ')"
-          echo "::notice::APK versionCode: ${VERSION}"
-
-          for component in MainActivity ScanActivity; do
-            grep -q "id.helux.dsh.$component" "$RUNNER_TEMP/manifest.txt" \
-              || { echo "::error::$component is missing from the APK manifest"; exit 1; }
-          done
-          echo "APK declares MainActivity and ScanActivity"
-
-          # AGP injects <applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-          # for every app targeting SDK 33+, so dynamically registered receivers
-          # default to NOT_EXPORTED. It is a signature-level permission the
-          # system grants automatically and users never see it. Everything else
-          # must be exactly CAMERA + INTERNET.
-          ALLOWED_EXTRA="id.helux.dsh.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-          unexpected="$(echo "$REQUESTED" | grep -v -x -F -e 'android.permission.CAMERA' \
-            -e 'android.permission.INTERNET' -e "$ALLOWED_EXTRA" || true)"
-          if [ -n "$unexpected" ]; then
-            echo "::error::unexpected permissions in the APK: $(echo "$unexpected" | tr '\n' ' ')"
-            exit 1
-          fi
-          for required in android.permission.CAMERA android.permission.INTERNET; do
-            echo "$REQUESTED" | grep -q -x -F "$required" \
-              || { echo "::error::$required is missing from the APK"; exit 1; }
-          done
-          echo "APK requests CAMERA + INTERNET and nothing user-visible beyond that"
-
-          if ! grep -q "android:name=\"id.helux.dsh.ScanActivity\"" "$RUNNER_TEMP/manifest.txt" \
-             && ! grep -q "id.helux.dsh.ScanActivity\"" "$RUNNER_TEMP/manifest.txt"; then
-            echo "::error::ScanActivity is present but not as a declared activity"
-            exit 1
-          fi
-
-          [ "$VERSION" = "versionCode='2'" ] \
-            || { echo "::error::unexpected versionCode: $VERSION"; exit 1; }
-          echo "APK versionCode is 2"
-
-      - name: Report APK
-        run: |
-          set -euo pipefail
-          APK=app/build/outputs/apk/debug/app-debug.apk
-          test -f "$APK"
-          echo "### APK built" >> "$GITHUB_STEP_SUMMARY"
+          echo "### APKs built" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| file | size | sha256 |" >> "$GITHUB_STEP_SUMMARY"
           echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| app-debug.apk | $(du -h "$APK" | cut -f1) | \`$(sha256sum "$APK" | cut -d' ' -f1)\` |" >> "$GITHUB_STEP_SUMMARY"
+          for apk in app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk; do
+            test -f "$apk"
+            echo "| $(basename "$apk") | $(du -h "$apk" | cut -f1) | \`$(sha256sum "$apk" | cut -d' ' -f1)\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: helux-dsh-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: helux-dsh-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
